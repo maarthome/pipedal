@@ -1,0 +1,574 @@
+diff --git a/vite/src/pipedal/AppThemed.tsx b/vite/src/pipedal/AppThemed.tsx
+index 2c2cdd2..991c073 100644
+--- a/vite/src/pipedal/AppThemed.tsx
++++ b/vite/src/pipedal/AppThemed.tsx
+@@ -577,6 +577,10 @@ export
+         });
+     }
+     toggleFullScreen(): void {
++        if (window.innerHeight < 500) {
++            window.dispatchEvent(new Event("pipedal-toggle-fit"));
++            return;
++        }
+         setFullScreen(!this.state.isFullScreen);
+         this.setState({ isFullScreen: !this.state.isFullScreen });
+     }
+diff --git a/vite/src/pipedal/JackStatusView.tsx b/vite/src/pipedal/JackStatusView.tsx
+index 40a01a4..5b50483 100644
+--- a/vite/src/pipedal/JackStatusView.tsx
++++ b/vite/src/pipedal/JackStatusView.tsx
+@@ -80,7 +80,7 @@ export default class JackStatusView extends React.Component<JackStatusViewProps,
+             <div style={{
+                 position: "absolute", right: 30, bottom: 2,left: 30, height: 30, 
+                 paddingRight: 20, paddingBottom: 6,
+-                textAlign: "center", opacity: 0.7, whiteSpace: "nowrap", fontSize: 12, zIndex: 10, fontWeight: 900
++                textAlign: "center", opacity: 0.7, whiteSpace: "nowrap", fontSize: 12, zIndex: 10, fontWeight: 900, pointerEvents: "none"
+             }}>
+                 {JackHostStatus.getDisplayView("",this.state.jackStatus) }
+             </div>
+diff --git a/vite/src/pipedal/MainPage.tsx b/vite/src/pipedal/MainPage.tsx
+index 59c78b8..f2a1148 100644
+--- a/vite/src/pipedal/MainPage.tsx
++++ b/vite/src/pipedal/MainPage.tsx
+@@ -32,6 +32,7 @@ import {
+     Pedalboard, PedalboardItem, PedalboardSplitItem, SplitType
+ } from './Pedalboard';
+ import InputIcon from '@mui/icons-material/Input';
++import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+ import LoadPluginDialog from './LoadPluginDialog';
+ import Switch from '@mui/material/Switch';
+ import Typography from '@mui/material/Typography';
+@@ -130,6 +131,10 @@ interface MainState {
+     splitControlBar: boolean;
+     displayAuthor: boolean;
+     horizontalScrollLayout: boolean;
++    controlsOpen: boolean;
++    fitScale: number;
++    fitted: boolean;
++    wholeChain: boolean;
+     canDisplayPluginIcon: boolean;
+     showMidiBindingsDialog: boolean;
+     screenHeight: number;
+@@ -180,7 +185,7 @@ export const MainPage =
+                         splitControlBar: this.getSplitToolbar(),
+                         displayAuthor: this.getDisplayAuthor(),
+                         canDisplayPluginIcon: this.getShowPluginIcon(),
+-                        horizontalScrollLayout: this.windowSize.height < HORIZONTAL_CONTROL_SCROLL_HEIGHT_BREAK,
++                        horizontalScrollLayout: this.windowSize.height < HORIZONTAL_CONTROL_SCROLL_HEIGHT_BREAK, controlsOpen: false, fitScale: 1, fitted: false, wholeChain: false,
+                         showMidiBindingsDialog: false,
+                         screenHeight: this.windowSize.height,
+                         showModUi: false
+@@ -189,6 +194,9 @@ export const MainPage =
+                     };
+                     this.onSelectionChanged = this.onSelectionChanged.bind(this);
+                     this.onPedalDoubleClick = this.onPedalDoubleClick.bind(this);
++                    this.onToggleFit = this.onToggleFit.bind(this);
++                    window.addEventListener("pipedal-toggle-fit", this.onToggleFit);
++                    setTimeout(() => this.startAutoFit(), 800);
+                     this.onLoadClick = this.onLoadClick.bind(this);
+                     this.onLoadOk = this.onLoadOk.bind(this);
+                     this.onLoadCancel = this.onLoadCancel.bind(this);
+@@ -330,8 +338,116 @@ export const MainPage =
+                     }
+                 }
+ 
++                autoFitOff: boolean = false;
++                fitTimer: any = null;
++                lastFit: number = 0;
++                computeFitScale(heightOnly: boolean = false): number | null {
++                    let area = document.getElementById("pedalboardScroll");
++                    let host = document.getElementById("pedalboardZoom");
++                    if (!area || !host || area.clientWidth === 0 || area.clientHeight === 0) return null;
++                    let prevZoom = host.style.zoom;
++                    host.style.zoom = "1";
++                    let hr = host.getBoundingClientRect();
++                    let maxR = 0, maxB = 0;
++                    host.querySelectorAll("*").forEach((e) => {
++                        let r = e.getBoundingClientRect();
++                        if (r.width <= 0 || r.height <= 0) return;
++                        if (r.width >= area!.clientWidth - 2 || r.height >= area!.clientHeight - 2) return;
++                        maxR = Math.max(maxR, r.right - hr.left);
++                        maxB = Math.max(maxB, r.bottom - hr.top);
++                    });
++                    host.style.zoom = prevZoom;
++                    if (maxR <= 0 || maxB <= 0) return null;
++                    let rowShown = !!document.getElementById("chainNameRow");
++                    let availH = heightOnly ? area.clientHeight + (rowShown ? 52 : 0) : area.clientHeight - (rowShown ? 0 : 52);
++                    let scale = heightOnly
++                        ? availH / (maxB + 16)
++                        : Math.min(area.clientWidth / (maxR + 16), availH / (maxB + 16));
++                    return Math.min(Math.max(scale, 0.3), 3);
++                }
++                fitNow(heightOnly: boolean = false): void {
++                    if (!this.state.horizontalScrollLayout) return;
++                    let scale = this.computeFitScale(heightOnly);
++                    if (scale === null) return;
++                    let area = document.getElementById("pedalboardScroll");
++                    if (area) { area.scrollLeft = 0; area.scrollTop = 0; }
++                    this.lastFit = Date.now();
++                    if (this.state.fitted && this.state.wholeChain === !heightOnly && Math.abs(scale - this.state.fitScale) < 0.005) return;
++                    this.setState({ fitScale: scale, fitted: true, wholeChain: !heightOnly });
++                }
++                scheduleFit(): void {
++                    if (this.autoFitOff) return;
++                    if (Date.now() - this.lastFit < 800) return;
++                    if (this.fitTimer) clearTimeout(this.fitTimer);
++                    this.fitTimer = setTimeout(() => { this.fitTimer = null; this.fitNow(); }, 250);
++                }
++                startAutoFit(): void {
++                    let host = document.getElementById("pedalboardZoom");
++                    if (!host) { setTimeout(() => this.startAutoFit(), 500); return; }
++                    let lastSig = "";
++                    new MutationObserver(() => {
++                        let sig = String(host!.querySelectorAll("*").length);
++                        if (sig === lastSig) return;
++                        lastSig = sig;
++                        this.scheduleFit();
++                    }).observe(host, { childList: true, subtree: true });
++                    if (!(window as any).__pipedalDblTap) {
++                        (window as any).__pipedalDblTap = true;
++                        document.documentElement.style.touchAction = "pan-x pan-y";
++                        let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
++                        document.addEventListener("click", (ev: MouseEvent) => {
++                            if (!this.state.horizontalScrollLayout || this.state.controlsOpen) return;
++                            let t = ev.target as HTMLElement;
++                            if (t && t.closest && t.closest('button, header, [role="button"], [role="dialog"], [role="menu"], .MuiPopover-root, .MuiModal-root')) { lastTapTime = 0; return; }
++                            let now = Date.now();
++                            if (now - lastTapTime < 400 && Math.abs(ev.clientX - lastTapX) < 40 && Math.abs(ev.clientY - lastTapY) < 40) {
++                                lastTapTime = 0;
++                                this.autoFitOff = false;
++                                this.fitNow();
++                            } else {
++                                lastTapTime = now; lastTapX = ev.clientX; lastTapY = ev.clientY;
++                            }
++                        }, true);
++                        let pinchStart = 0, pinchBase = 1;
++                        let pinchDist = (ev: TouchEvent) => Math.hypot(ev.touches[0].clientX - ev.touches[1].clientX, ev.touches[0].clientY - ev.touches[1].clientY);
++                        document.addEventListener("touchstart", (ev: TouchEvent) => {
++                            if (ev.touches.length !== 2 || !this.state.horizontalScrollLayout || this.state.controlsOpen) return;
++                            pinchStart = pinchDist(ev); pinchBase = this.state.fitScale;
++                        }, { passive: true, capture: true });
++                        document.addEventListener("touchmove", (ev: TouchEvent) => {
++                            if (ev.touches.length !== 2 || pinchStart <= 0) return;
++                            let z = Math.min(Math.max(pinchBase * pinchDist(ev) / pinchStart, 0.3), 4);
++                            this.autoFitOff = true;
++                            this.setState({ fitScale: z, fitted: false, wholeChain: false });
++                        }, { passive: true, capture: true });
++                        document.addEventListener("touchend", (ev: TouchEvent) => { if (ev.touches.length < 2) pinchStart = 0; }, { passive: true, capture: true });
++                    }
++                    this.scheduleFit();
++                }
++                onToggleFit(): void {
++                    if (!this.state.horizontalScrollLayout) return;
++                    if (this.state.wholeChain) {
++                        let scale = this.computeFitScale(true);
++                        if (scale === null) return;
++                        this.autoFitOff = true;
++                        this.lastFit = Date.now();
++                        let area = document.getElementById("pedalboardScroll");
++                        if (area) { area.scrollLeft = 0; area.scrollTop = 0; }
++                        this.setState({ fitScale: scale, fitted: true, wholeChain: false });
++                    } else {
++                        this.autoFitOff = false;
++                        this.fitNow();
++                    }
++                }
++                openControlsIfSmall(selectedId: number): void {
++                    if (!this.state.horizontalScrollLayout) return;
++                    if (this.getPedalboardItem(selectedId) != null) {
++                        if (this.getPedalboardItem(selectedId)?.isEmpty()) { this.setState({ loadDialogOpen: true }); } else { this.setState({ controlsOpen: true }); }
++                    }
++                }
+                 onSelectionChanged(selectedId: number): void {
+                     this.setSelection(selectedId);
++                    // single tap only selects
+                 }
+                 onPedalDoubleClick(selectedId: number): void {
+                     this.setSelection(selectedId);
+@@ -341,13 +457,13 @@ export const MainPage =
+                             // do nothing.
+                         } else if (item.isSplit()) {
+                             let split = item as PedalboardSplitItem;
+-                            if (split.getSplitType() === SplitType.Ab) {
++                            if (this.state.horizontalScrollLayout) { this.setState({ controlsOpen: true }); } else if (split.getSplitType() === SplitType.Ab) {
+                                 let cv = split.getToggleAbControlValue();
+                                 if (split.instanceId === undefined) throw new PiPedalStateError("Split without valid id.");
+                                 this.model.setPedalboardControl(split.instanceId, cv.key, cv.value);
+                             }
+                         } else {
+-                            this.setState({ loadDialogOpen: true });
++                            if (this.state.horizontalScrollLayout && !item.isEmpty()) { this.setState({ controlsOpen: true }); } else { this.setState({ loadDialogOpen: true }); }
+                         }
+                     }
+                 }
+@@ -662,18 +778,57 @@ export const MainPage =
+                     return (
+                         <div className={classes.frame}>
+                             <div id="pedalboardScroll" className={horizontalScrollLayout ? classes.pedalboardScrollSmall : classes.pedalboardScroll}
+-                                style={{ maxHeight: horizontalScrollLayout ? undefined : this.state.screenHeight / 2 }}>
++                                style={{ maxHeight: horizontalScrollLayout ? undefined : this.state.screenHeight / 2, display: (horizontalScrollLayout && this.state.controlsOpen) ? "none" : undefined }}>
++                                <div id="pedalboardZoom" style={{ zoom: this.state.fitScale }}>
+                                 <PedalboardView key={pluginUri} selectedId={this.state.selectedPedal}
+                                     enableStructureEditing={this.props.enableStructureEditing}
+                                     onSelectionChanged={this.onSelectionChanged}
+                                     onDoubleClick={this.onPedalDoubleClick}
+                                     hasTinyToolBar={this.props.hasTinyToolBar}
+                                 />
++                                </div>
+                             </div>
+-                            <div className={classes.separator} />
+-                            <div className={classes.controlToolBar}>
++                            {horizontalScrollLayout && !this.state.controlsOpen && this.state.wholeChain && (
++                                <div id="chainNameRow" style={{ flex: "0 0 auto", height: 52, lineHeight: "52px", textAlign: "center", fontSize: 39, fontWeight: 700,
++                                    color: "#FFD400", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: "0 12px", pointerEvents: "none" }}>
++                                    {this.state.pedalboard.name}
++                                </div>
++                            )}
++                            <div className={classes.separator} style={{ display: (horizontalScrollLayout && this.state.controlsOpen) ? "none" : undefined }} />
++                            {horizontalScrollLayout && !this.state.controlsOpen && this.props.enableStructureEditing && (
++                                <div style={{ flex: "0 0 auto", display: "flex", justifyContent: "flex-end", alignItems: "center", height: 56, paddingRight: 8, position: "relative", zIndex: 5 }}>
++                                    <div style={{ flex: "0 0 auto", display: (canInsert || canAppend) ? "block" : "none" }}>
++                                        <IconButtonEx tooltip="Add pedal slot" onClick={(e) => { this.onAddClick(e) }} size="large">
++                                            <AddIcon style={{ height: 24, width: 24, fill: this.props.theme.palette.text.primary, opacity: 0.6 }} />
++                                        </IconButtonEx>
++                                    </div>
++                                    <ButtonEx
++                                        variant="contained"
++                                        color="primary"
++                                        size="small"
++                                        tooltip="Load plugin"
++                                        onClick={this.onLoadClick}
++                                        disabled={this.state.selectedPedal === -1 || (!canLoad) || (this.getSelectedPedalboardItem()?.isSplit() ?? true)}
++                                        startIcon={<InputIcon />}
++                                        style={{ textTransform: "none", marginRight: 8, background: (isDarkMode() ? "#6750A4" : undefined) }}
++                                    >
++                                        Load
++                                    </ButtonEx>
++                                    <IconButtonEx tooltip="MIDI bindings"
++                                        onClick={(e) => { this.handleMidiConfiguration(instanceId); }}
++                                        size="large">
++                                        <MidiIcon style={{ height: 24, width: 24, fill: this.props.theme.palette.text.primary, opacity: 0.6 }} />
++                                    </IconButtonEx>
++                                    <IconButtonEx tooltip="Snapshots"
++                                        onClick={(e) => { this.setState({ snapshotDialogOpen: true }); }}
++                                        size="large">
++                                        {this.snapshotIcon(this.props.theme, this.state.selectedSnapshot)}
++                                    </IconButtonEx>
++                                </div>
++                            )}
++                            <div className={classes.controlToolBar} style={horizontalScrollLayout ? (this.state.controlsOpen ? { position: "fixed", left: 56, right: 0, top: 0, height: 48, zIndex: 1150, background: this.props.theme.palette.background.default, borderBottom: "1px solid rgba(128,128,128,0.4)" } : { display: "none" }) : undefined}>
+                                 <div style={{
+-                                    display: "flex", flexFlow: "row nowrap", alignItems: "center", justifyContent: "center", minWidth: 0,
++                                    display: "flex", flexFlow: "row nowrap", alignItems: "center", justifyContent: horizontalScrollLayout ? "flex-start" : "center", minWidth: 0,
+                                     width: "100%", height: 48, paddingLeft: 16, paddingRight: 16
+                                 }} >
+                                     <div style={{ flex: "0 0 auto", width: this.state.splitControlBar ? undefined : 60 }} >
+@@ -686,19 +841,47 @@ export const MainPage =
+                                     </div>
+                                     {
+                                         (!this.state.splitControlBar || !this.props.enableStructureEditing)
+-                                        && this.titleBar(pedalboardItem, canShowModUi)
++                                        && (<div id="editTitleWrap" style={{ flex: "0 1 auto", minWidth: 0, overflow: "hidden", display: "flex" }}>
++                                            {horizontalScrollLayout && (<style>{"#editTitleWrap ." + classes.author.split(" ").filter((x: string) => x).join(".") + " { display: none !important; } #editTitleWrap div { flex-grow: 0 !important; } #editTitleWrap > div { flex: 0 1 auto !important; min-width: 0 !important; overflow: hidden !important; }"}</style>)}
++                                            {this.titleBar(pedalboardItem, canShowModUi)}
++                                        </div>)
+                                     }
+-                                    <div style={{ flex: "1 1 1px" }}>
++                                    <div style={{ flex: horizontalScrollLayout ? "0 0 0px" : "1 1 1px" }}>
+ 
+                                     </div>
+                                     {this.props.enableStructureEditing && (
+                                         <div style={{ flex: "0 0 auto", display: "flex", flexFlow: "row nowrap", alignItems: "center" }}>
+-                                            <div style={{ flex: "0 0 auto" }}>
++                                            {horizontalScrollLayout && canDelete && (
++                                                <div style={{ flex: "0 0 auto", order: 1 }}>
++                                                    <IconButtonEx tooltip="Delete pedal"
++                                                        onClick={() => { this.onDeletePedal(pedalboardItem?.instanceId ?? -1); this.setState({ controlsOpen: false }); }}
++                                                        size="large">
++                                                        <OldDeleteIcon style={{ height: 24, width: 24, fill: this.props.theme.palette.text.primary, opacity: 0.6 }} />
++                                                    </IconButtonEx>
++                                                </div>
++                                            )}
++                                            {horizontalScrollLayout && (
++                                                <div style={{ flex: "0 0 auto", order: 3 }}>
++                                                    <ButtonEx
++                                                        variant="contained"
++                                                        color="primary"
++                                                        size="small"
++                                                        tooltip="Load plugin"
++                                                        onClick={this.onLoadClick}
++                                                        disabled={this.state.selectedPedal === -1 || (!canLoad) || (this.getSelectedPedalboardItem()?.isSplit() ?? true)}
++                                                        startIcon={<InputIcon />}
++                                                        style={{ textTransform: "none", background: (isDarkMode() ? "#6750A4" : undefined) }}
++                                                    >
++                                                        Load
++                                                    </ButtonEx>
++                                                </div>
++                                            )}
++                                            <div style={{ flex: "0 0 auto", order: 2 }}>
+                                                 <PluginPresetSelector pedalboardItem={pedalboardItem} instanceId={pedalboardItem?.instanceId ?? 0}
+                                                 />
+                                             </div>
+ 
+-                                            <div style={{ flex: "0 0 auto", display: (canInsert || canAppend) ? "block" : "none" }}>
++                                            <div style={{ flex: "0 0 auto", display: horizontalScrollLayout ? "none" : ((canInsert || canAppend) ? "block" : "none") }}>
+                                                 <IconButtonEx tooltip="Add pedal slot" onClick={(e) => { this.onAddClick(e) }} size="large">
+                                                     <AddIcon style={{ height: 24, width: 24, fill: this.props.theme.palette.text.primary, opacity: 0.6 }} />
+                                                 </IconButtonEx>
+@@ -717,14 +900,14 @@ export const MainPage =
+                                                     {canAppend && (<MenuItem onClick={() => this.onAppendSplit(instanceId)}>Append split</MenuItem>)}
+                                                 </Menu>
+                                             </div>
+-                                            <div style={{ flex: "0 0 auto", display: canDelete ? "block" : "none",  }}>
++                                            <div style={{ flex: "0 0 auto", display: horizontalScrollLayout ? "none" : (canDelete ? "block" : "none") }}>
+                                                 <IconButtonEx tooltip="Delete pedal"
+                                                     onClick={() => { this.onDeletePedal(pedalboardItem?.instanceId ?? -1) }}
+                                                     size="large">
+                                                     <OldDeleteIcon style={{ height: 24, width: 24, fill: this.props.theme.palette.text.primary, opacity: 0.6 }} />
+                                                 </IconButtonEx>
+                                             </div>
+-                                            <div style={{ flex: "0 0 auto" }}>
++                                            <div style={{ flex: "0 0 auto", display: horizontalScrollLayout ? "none" : undefined }}>
+                                                 <ButtonEx
+                                                     variant="contained"
+                                                     color="primary"
+@@ -741,14 +924,14 @@ export const MainPage =
+                                                     Load
+                                                 </ButtonEx>
+                                             </div>
+-                                            <div style={{ flex: "0 0 auto" }}>
++                                            <div style={{ flex: "0 0 auto", display: horizontalScrollLayout ? "none" : undefined }}>
+                                                 <IconButtonEx tooltip="MIDI bindings"
+                                                     onClick={(e) => { this.handleMidiConfiguration(instanceId); }}
+                                                     size="large">
+                                                     <MidiIcon style={{ height: 24, width: 24, fill: this.props.theme.palette.text.primary, opacity: 0.6 }} />
+                                                 </IconButtonEx>
+                                             </div>
+-                                            <div style={{ flex: "0 0 auto" }}>
++                                            <div style={{ flex: "0 0 auto", display: horizontalScrollLayout ? "none" : undefined }}>
+                                                 <IconButtonEx tooltip="Snapshots"
+                                                     onClick={(e) => { this.setState({ snapshotDialogOpen: true }); }}
+                                                     size="large">
+@@ -768,7 +951,24 @@ export const MainPage =
+                                     </div>
+                                 )
+                             }
+-                            <div id="mainPageControls" className={horizontalScrollLayout ? classes.controlContentSmall : classes.controlContent}>
++                            {horizontalScrollLayout && this.state.controlsOpen && (
++                                <div style={{
++                                    position: "fixed", left: 0, width: 56, top: 0, height: 48, zIndex: 1150,
++                                    display: "flex", flexFlow: "row nowrap", alignItems: "center",
++                                    background: this.props.theme.palette.background.default,
++                                    borderBottom: "1px solid rgba(128,128,128,0.4)", paddingLeft: 4, paddingRight: 8
++                                }}>
++                                    <IconButtonEx tooltip="Back" onClick={() => this.setState({ controlsOpen: false })} size="large">
++                                        <ArrowBackIcon style={{ height: 24, width: 24, fill: this.props.theme.palette.text.primary }} />
++                                    </IconButtonEx>
++                                    
++                                </div>
++                            )}
++                            <div id="mainPageControls" className={horizontalScrollLayout ? classes.controlContentSmall : classes.controlContent}
++                                style={horizontalScrollLayout ? (this.state.controlsOpen ? {
++                                    position: "fixed", left: 0, right: 0, bottom: 0, top: 48, height: "auto", zIndex: 1150,
++                                    overflow: "hidden", background: this.props.theme.palette.background.default
++                                } : { display: "none" }) : undefined}>
+                                 {
+                                     missing ? (
+                                         <div style={{ marginLeft: 40, marginTop: 20 }}>
+@@ -778,7 +978,7 @@ export const MainPage =
+ 
+                                     ) :
+                                         (
+-                                            GetControlView(pedalboardItem, this.state.showModUi && canShowModUi,
++                                            (horizontalScrollLayout && !this.state.controlsOpen) ? null : GetControlView(pedalboardItem, this.state.showModUi && canShowModUi,
+                                                 (instanceId: number, showModGui: boolean) => {
+                                                     this.model.setPedalboardItemUseModUi(instanceId, showModGui)
+                                                     this.setState({ showModUi: showModGui });
+diff --git a/vite/src/pipedal/PedalboardView.tsx b/vite/src/pipedal/PedalboardView.tsx
+index aeed9b2..a106aaa 100644
+--- a/vite/src/pipedal/PedalboardView.tsx
++++ b/vite/src/pipedal/PedalboardView.tsx
+@@ -58,9 +58,10 @@ const DISABLED_CONNECTOR_COLOR = isDarkMode() ? "#666" : "#CCC";
+ 
+ 
+ 
+-const CELL_WIDTH: number = 96;
+-const CELL_HEIGHT: number = 64;
+-const FRAME_SIZE: number = 36;
++const ICON_SCALE: number = (window.innerHeight < 500) ? 2 : 1;
++const FRAME_SIZE: number = 36 * ICON_SCALE;
++const CELL_WIDTH: number = (window.innerHeight < 500) ? FRAME_SIZE + 6 : 96;
++const CELL_HEIGHT: number = 28 + FRAME_SIZE;
+ 
+ const STROKE_WIDTH = 3;
+ const STEREO_STROKE_WIDTH = 6;
+@@ -210,8 +211,8 @@ const pedalboardStyles = (theme: Theme) => createStyles({
+     }),
+ 
+     pedalIcon: css({
+-        width: 24,
+-        height: 24,
++        width: 24 * ICON_SCALE,
++        height: 24 * ICON_SCALE,
+         opacity: 0.8
+     }),
+     connector: css({
+@@ -748,7 +749,7 @@ const PedalboardView =
+                     return bounds;
+                 }
+                 doLayout(layoutItems: PedalLayout[]): LayoutSize {
+-                    const TWO_ROW_HEIGHT = 142 - 14;
++                    const TWO_ROW_HEIGHT = (142 - 14) * (CELL_HEIGHT / 64);
+ 
+                     if (layoutItems.length === 0) {
+                         // if the current pedalboard is empty, reserve display space anyway.
+@@ -1107,7 +1108,7 @@ const PedalboardView =
+                                 >
+                                     <div id="childIcon" style={{ position: "relative", display: "flex", justifyContent: "center", alignItems: "center" }} >
+                                         <PluginIcon pluginType={iconType}
+-                                            size={24}
++                                            size={24 * ICON_SCALE}
+                                             color={getIconColor(iconColor)}
+                                             pluginMissing={pluginNotFound}
+                                         />
+diff --git a/vite/src/pipedal/PluginControlView.tsx b/vite/src/pipedal/PluginControlView.tsx
+index a2ef761..1676bdb 100644
+--- a/vite/src/pipedal/PluginControlView.tsx
++++ b/vite/src/pipedal/PluginControlView.tsx
+@@ -62,7 +62,7 @@ export const StandardItemSize = { width: 80, height: 110 };
+ 
+ 
+ 
+-const LANDSCAPE_HEIGHT_BREAK = 500;
++// const LANDSCAPE_HEIGHT_BREAK = 500;
+ 
+ 
+ export interface ICustomizationHost {
+@@ -450,7 +450,7 @@ const PluginControlView =
+ 
+ 
+             onWindowSizeChanged(width: number, height: number): void {
+-                this.setState({ landscapeGrid: height < LANDSCAPE_HEIGHT_BREAK });
++                this.setState({ landscapeGrid: false });
+             }
+             filterNotOnGui(controlValues: ControlValue[], uiPlugin: UiPlugin): ControlValue[] {
+                 let result: ControlValue[] = [];
+diff --git a/vite/src/pipedal/SnapshotDialog.tsx b/vite/src/pipedal/SnapshotDialog.tsx
+index 1d97b36..8eac718 100644
+--- a/vite/src/pipedal/SnapshotDialog.tsx
++++ b/vite/src/pipedal/SnapshotDialog.tsx
+@@ -24,8 +24,8 @@
+ */
+ 
+ import React from 'react';
+-import Typography from '@mui/material/Typography';
+ import DialogEx from './DialogEx';
++import { PiPedalModelFactory } from './PiPedalModel';
+ import DialogContent from '@mui/material/DialogContent';
+ import DialogTitle from '@mui/material/DialogTitle';
+ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+@@ -89,7 +89,7 @@ export default class SnapshotDialog extends ResizeResponsiveComponent<SnapshotDi
+     }
+ 
+     getFullScreen() {
+-        return document.documentElement.clientHeight < 450 || document.documentElement.clientWidth < 450;
++        return document.documentElement.clientHeight < 500 || document.documentElement.clientWidth < 450;
+     }
+     onWindowSizeChanged(width: number, height: number): void {
+         this.setState(
+@@ -112,22 +112,52 @@ export default class SnapshotDialog extends ResizeResponsiveComponent<SnapshotDi
+                   }}
+                 onEnterKey={()=>{} }
+             >
+-                <DialogTitle>
+-                    <div>
++                {this.state.fullScreen ? (
++                <div id="snapFull" style={{ position: "fixed", left: 0, top: 0, right: 0, bottom: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
++                    <div style={{ position: "fixed", left: 0, right: 0, top: 0, height: 52, zIndex: 3000 }}>
+                         <IconButtonEx tooltip="Back" edge="start" color="inherit" onClick={() => { this.props.onOk(); }} aria-label="back"
++                            style={{ position: "absolute", left: 4, top: 4, zIndex: 2 }}
+                         >
+                             <ArrowBackIcon fontSize="small" style={{ opacity: "0.6" }} />
+                         </IconButtonEx>
+-                        <Typography display="inline" variant="body1" color="textSecondary" >Snapshots</Typography>
++                        <div style={{ position: "absolute", left: 0, right: 0, top: 0, height: 52, margin: 0, display: "flex", alignItems: "center", justifyContent: "center",
++                            lineHeight: 1, fontSize: 39, fontWeight: 700, color: "#FFD400",
++                            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: "0 56px" }}>
++                            {PiPedalModelFactory.getInstance().pedalboard.get().name}
++                        </div>
++                    </div>
++                    <div id="snapWrap" style={{ position: "fixed", left: 12, right: 12, top: 60, bottom: 8 }}>
++                        <style>{"#snapWrap > div { padding: 0 !important; height: 100% !important; box-sizing: border-box !important; }"}</style>
++                        <SnapshotPanel panelHeight="100%" />
++                    </div>
++                </div>
++            ) : (
++            <>
++<DialogTitle style={{ padding: 0, height: 48, minHeight: 48, flex: "0 0 48px", position: "relative", overflow: "hidden" }}>
++                    <IconButtonEx tooltip="Back" edge="start" color="inherit" onClick={() => { this.props.onOk(); }} aria-label="back"
++                        style={{ position: "absolute", left: 4, top: 4, zIndex: 2 }}
++                    >
++                        <ArrowBackIcon fontSize="small" style={{ opacity: "0.6" }} />
++                    </IconButtonEx>
++                    <div style={{ textAlign: "center", lineHeight: "48px", height: 48, fontSize: 39, fontWeight: 700, color: "#FFD400",
++                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: "0 56px" }}>
++                        {PiPedalModelFactory.getInstance().pedalboard.get().name}
+                     </div>
+-
+                 </DialogTitle>
+                 <DialogContent style={{
+-                    overflow: "hidden", margin: 0, height: "80vh",
+-                    paddingLeft: 16, paddingRight: 16, paddingTop: 0, paddingBottom: 24,
++                    position: "relative", overflow: "hidden", margin: 0, padding: 0,
++                    flex: this.state.fullScreen ? "1 1 0px" : undefined, minHeight: 0,
++                    height: this.state.fullScreen ? undefined : "80vh",
+                 }}>
+-                    <SnapshotPanel panelHeight="80vh" />
++                    {this.state.fullScreen && (<style>{"#snapWrap > div { padding: 0 !important; box-sizing: border-box !important; height: 100% !important; }"}</style>)}
++                    <div id="snapWrap" style={this.state.fullScreen
++                        ? { position: "absolute", left: 12, right: 12, top: 0, bottom: 8 }
++                        : { padding: "0 16px 24px 16px" }}>
++                        <SnapshotPanel panelHeight={this.state.fullScreen ? "100%" : "80vh"} />
++                    </div>
+                 </DialogContent>
++            </>
++            )}
+             </DialogEx>
+         );
+     }
+diff --git a/vite/src/pipedal/SnapshotPanel.tsx b/vite/src/pipedal/SnapshotPanel.tsx
+index b8dd4a2..039806d 100644
+--- a/vite/src/pipedal/SnapshotPanel.tsx
++++ b/vite/src/pipedal/SnapshotPanel.tsx
+@@ -257,7 +257,8 @@ export default class SnapshotPanel extends ResizeResponsiveComponent<SnapshotPan
+                 display: "flex", flexFlow: "column nowrap", alignContent: "stretch", justifyContent: "stretch"
+             }}>
+ 
+-                <div style={{
++                {(window.innerHeight < 500 && !this.state.portraitOrientation) && (<style>{".snapGrid { min-height: 0 !important; height: 100% !important; flex: 1 1 0px !important; display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, calc((100% - 8px) / 2)) !important; gap: 8px; overflow: hidden; } .snapGrid > div { display: contents !important; } .snapGrid > div > * { width: auto !important; height: auto !important; min-width: 0 !important; min-height: 0 !important; max-width: none !important; max-height: none !important; flex: none !important; overflow: hidden !important; }"}</style>)}
++                <div className="snapGrid" style={{
+                     flexGrow: 1, flexShrink: 1, flexBasis: 1,
+ 
+                     display: "flex",
+diff --git a/vite/src/pipedal/SplitControlView.tsx b/vite/src/pipedal/SplitControlView.tsx
+index 282b336..e99074f 100644
+--- a/vite/src/pipedal/SplitControlView.tsx
++++ b/vite/src/pipedal/SplitControlView.tsx
+@@ -35,7 +35,7 @@ import { SplitAbControl, SplitTypeControl, SplitMixControl, SplitPanLeftControl,
+ import { css } from '@emotion/react';
+ 
+ 
+-const LANDSCAPE_HEIGHT_BREAK = 500;
++// const LANDSCAPE_HEIGHT_BREAK = 500;
+ 
+ const styles = (theme: Theme) => createStyles({
+     frame: css({
+@@ -157,7 +157,7 @@ const SplitControlView =
+             }
+ 
+             onWindowSizeChanged(width: number, height: number): void {
+-                this.setState({ landscapeGrid: height < LANDSCAPE_HEIGHT_BREAK });
++                this.setState({ landscapeGrid: false });
+             }
+ 
+ 
