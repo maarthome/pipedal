@@ -577,6 +577,10 @@ export
         });
     }
     toggleFullScreen(): void {
+        if (window.innerHeight < 500) {
+            window.dispatchEvent(new Event("pipedal-toggle-fit"));
+            return;
+        }
         setFullScreen(!this.state.isFullScreen);
         this.setState({ isFullScreen: !this.state.isFullScreen });
     }

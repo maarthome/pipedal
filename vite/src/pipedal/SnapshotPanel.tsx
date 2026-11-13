@@ -257,7 +257,8 @@ export default class SnapshotPanel extends ResizeResponsiveComponent<SnapshotPan
                 display: "flex", flexFlow: "column nowrap", alignContent: "stretch", justifyContent: "stretch"
             }}>
 
-                <div style={{
+                {(window.innerHeight < 500 && !this.state.portraitOrientation) && (<style>{".snapGrid { min-height: 0 !important; height: 100% !important; flex: 1 1 0px !important; display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, calc((100% - 8px) / 2)) !important; gap: 8px; overflow: hidden; } .snapGrid > div { display: contents !important; } .snapGrid > div > * { width: auto !important; height: auto !important; min-width: 0 !important; min-height: 0 !important; max-width: none !important; max-height: none !important; flex: none !important; overflow: hidden !important; }"}</style>)}
+                <div className="snapGrid" style={{
                     flexGrow: 1, flexShrink: 1, flexBasis: 1,
 
                     display: "flex",

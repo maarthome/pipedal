@@ -62,7 +62,7 @@ export const StandardItemSize = { width: 80, height: 110 };
 
 
 
-const LANDSCAPE_HEIGHT_BREAK = 500;
+// const LANDSCAPE_HEIGHT_BREAK = 500;
 
 
 export interface ICustomizationHost {
@@ -450,7 +450,7 @@ const PluginControlView =
 
 
             onWindowSizeChanged(width: number, height: number): void {
-                this.setState({ landscapeGrid: height < LANDSCAPE_HEIGHT_BREAK });
+                this.setState({ landscapeGrid: false });
             }
             filterNotOnGui(controlValues: ControlValue[], uiPlugin: UiPlugin): ControlValue[] {
                 let result: ControlValue[] = [];

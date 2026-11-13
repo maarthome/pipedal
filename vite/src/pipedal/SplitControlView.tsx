@@ -35,7 +35,7 @@ import { SplitAbControl, SplitTypeControl, SplitMixControl, SplitPanLeftControl,
 import { css } from '@emotion/react';
 
 
-const LANDSCAPE_HEIGHT_BREAK = 500;
+// const LANDSCAPE_HEIGHT_BREAK = 500;
 
 const styles = (theme: Theme) => createStyles({
     frame: css({
@@ -157,7 +157,7 @@ const SplitControlView =
             }
 
             onWindowSizeChanged(width: number, height: number): void {
-                this.setState({ landscapeGrid: height < LANDSCAPE_HEIGHT_BREAK });
+                this.setState({ landscapeGrid: false });
             }
 
 

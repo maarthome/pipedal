@@ -58,9 +58,10 @@ const DISABLED_CONNECTOR_COLOR = isDarkMode() ? "#666" : "#CCC";
 
 
 
-const CELL_WIDTH: number = 96;
-const CELL_HEIGHT: number = 64;
-const FRAME_SIZE: number = 36;
+const ICON_SCALE: number = (window.innerHeight < 500) ? 2 : 1;
+const FRAME_SIZE: number = 36 * ICON_SCALE;
+const CELL_WIDTH: number = (window.innerHeight < 500) ? FRAME_SIZE + 6 : 96;
+const CELL_HEIGHT: number = 28 + FRAME_SIZE;
 
 const STROKE_WIDTH = 3;
 const STEREO_STROKE_WIDTH = 6;
@@ -210,8 +211,8 @@ const pedalboardStyles = (theme: Theme) => createStyles({
     }),
 
     pedalIcon: css({
-        width: 24,
-        height: 24,
+        width: 24 * ICON_SCALE,
+        height: 24 * ICON_SCALE,
         opacity: 0.8
     }),
     connector: css({
@@ -748,7 +749,7 @@ const PedalboardView =
                     return bounds;
                 }
                 doLayout(layoutItems: PedalLayout[]): LayoutSize {
-                    const TWO_ROW_HEIGHT = 142 - 14;
+                    const TWO_ROW_HEIGHT = (142 - 14) * (CELL_HEIGHT / 64);
 
                     if (layoutItems.length === 0) {
                         // if the current pedalboard is empty, reserve display space anyway.
@@ -1107,7 +1108,7 @@ const PedalboardView =
                                 >
                                     <div id="childIcon" style={{ position: "relative", display: "flex", justifyContent: "center", alignItems: "center" }} >
                                         <PluginIcon pluginType={iconType}
-                                            size={24}
+                                            size={24 * ICON_SCALE}
                                             color={getIconColor(iconColor)}
                                             pluginMissing={pluginNotFound}
                                         />
