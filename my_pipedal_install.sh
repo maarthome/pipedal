@@ -1,11 +1,12 @@
 #!/bin/bash
 # my_pipedal_install.sh - build and install PiPedal from the maarthome/pipedal fork
-# (branch my_mods) on Raspberry Pi OS, optionally with the DSI touchscreen UI + kiosk.
+# (branch my_mods) on Raspberry Pi OS, optionally with the touchscreen kiosk.
+# The 7-inch DSI interface changes are part of the my_mods source, so the build already has them.
 #
 # Run as the normal user (not root), from anywhere:
-#   ./my_pipedal_install.sh               build + install; asks about the DSI screen at the end
-#   ./my_pipedal_install.sh --dsi         ... and install the DSI touchscreen UI + kiosk, no question
-#   ./my_pipedal_install.sh --no-dsi      ... without the DSI screen, no question
+#   ./my_pipedal_install.sh               build + install; asks about the touchscreen kiosk at the end
+#   ./my_pipedal_install.sh --dsi         ... and set up the touchscreen kiosk, no question
+#   ./my_pipedal_install.sh --no-dsi      ... without the kiosk, no question
 #   ./my_pipedal_install.sh --continue    continue an interrupted build (keeps the build folder)
 #   PIPEDAL_DIR=/other/path ./my_pipedal_install.sh    use another source folder
 # Default source folder: ~/git/pipedal
@@ -86,18 +87,18 @@ for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost/ && break; sleep
 if curl -sf -o /dev/null http://localhost/; then echo "PiPedal web interface answers on http://localhost"
 else echo "Warning: http://localhost does not answer yet (check: systemctl status pipedald)"; fi
 
-echo "== 6. DSI touchscreen UI + kiosk"
+echo "== 6. Touchscreen kiosk (the DSI interface itself is already part of this branch)"
+cp "$DIR"/{pipedal-run.sh,pipedal-remove.sh,dsi-ui/kiosk-setup.sh} "$HOME/"
+chmod +x "$HOME"/{pipedal-run.sh,pipedal-remove.sh,kiosk-setup.sh}
 if [ "$DSI" = ask ]; then
-  read -p "Install the DSI touchscreen UI and Chromium kiosk now? [y/N] " a
+  read -p "Set up the Chromium kiosk on the touchscreen now (autologin, startx, hidden pointer)? [y/N] " a
   [ "$a" = "y" ] && DSI=yes || DSI=no
 fi
 if [ "$DSI" = yes ]; then
-  cp "$DIR"/dsi-ui/{pipedal-dsi-ui.patch,pipedal-dsi-ui.commit,dsi-ui-install.sh,kiosk-setup.sh} "$DIR"/{pipedal-run.sh,pipedal-remove.sh} "$HOME/"
-  chmod +x "$HOME"/{dsi-ui-install.sh,kiosk-setup.sh,pipedal-run.sh,pipedal-remove.sh}
   "$HOME/kiosk-setup.sh"
-  "$HOME/dsi-ui-install.sh"     # asks about the reboot at the end
+  echo "Reboot to start the kiosk:  sudo reboot"
 else
-  echo "Skipped. Later: cd $DIR/dsi-ui and see README.txt."
+  echo "Skipped. Later: ~/kiosk-setup.sh"
 fi
 
-echo "== Done. Helper scripts (if the DSI part was installed): ~/pipedal-run.sh, ~/pipedal-remove.sh"
+echo "== Done. Helper scripts: ~/pipedal-run.sh, ~/pipedal-remove.sh"
