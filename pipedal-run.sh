@@ -20,7 +20,8 @@ CORE="pipedald.service pipedaladmind.service"
 CHROMIUM_FLAGS="${CHROMIUM_FLAGS:-}"   # extra Chromium flags, written into the kiosk service by update-kiosk
 KIOSK_DELAY="${KIOSK_DELAY:-0}"   # seconds between "web server answers" and starting Chromium
 
-units() { systemctl list-unit-files --plain --no-legend 'pipedal*.service' 2>/dev/null | awk '{print $1}'; }
+# the PiPedal services, WITHOUT the kiosk service (that one is started last, by start_kiosk)
+units() { systemctl list-unit-files --plain --no-legend 'pipedal*.service' 2>/dev/null | awk '{print $1}' | grep -v '^pipedal-kiosk\.service$'; }
 
 wait_web() {
   for i in $(seq 1 40); do curl -sf -o /dev/null http://localhost/ && return 0; sleep 1; done
