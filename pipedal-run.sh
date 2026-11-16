@@ -9,6 +9,7 @@
 #   pipedal-run.sh start-kiosk | stop-kiosk | restart-kiosk     only the screen
 #   pipedal-run.sh restart-pipedal    only the PiPedal services (audio server)
 #   pipedal-run.sh manual-mode        ONE-TIME setup: no autostart of PiPedal or the kiosk at boot
+#   pipedal-run.sh update-kiosk       rewrite the kiosk service file (after changes in this script)
 #   pipedal-run.sh autostart on|off   PiPedal services at boot (manual-mode switches this off)
 set -u
 
@@ -54,6 +55,8 @@ StandardError=journal
 UtmpIdentifier=tty1
 UtmpMode=user
 ExecStart=/usr/bin/startx /usr/bin/chromium --kiosk --no-sandbox --noerrdialogs --disable-infobars --incognito http://localhost -- -nocursor
+TimeoutStopSec=8
+KillMode=control-group
 ExecStopPost=-/bin/systemctl --no-block start getty@tty1.service
 EOT
   sudo systemctl daemon-reload
@@ -127,6 +130,7 @@ case "${1:-}" in
   restart-kiosk)   stop_kiosk; sleep 1; start_kiosk ;;
   restart-pipedal) stop_services; start_services ;;
   manual-mode)     manual_mode ;;
+  update-kiosk)    install_kiosk_unit; echo "Kiosk service file updated." ;;
   autostart)       autostart "${2:-}" ;;
-  *) sed -n '2,13p' "$0"; exit 1 ;;
+  *) sed -n '2,14p' "$0"; exit 1 ;;
 esac
