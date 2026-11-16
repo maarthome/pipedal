@@ -29,6 +29,7 @@ wait_web() {
 }
 
 start_services() {
+  echo "Starting PiPedal: scanning the LV2 plugins, this takes about 30 seconds..."
   for u in $(units); do
     # the core services are started even though they are not enabled at boot
     if echo " $CORE " | grep -q " $u " || systemctl is-enabled --quiet "$u" 2>/dev/null; then sudo systemctl start "$u"; fi
