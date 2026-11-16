@@ -92,7 +92,7 @@ if [ "$DSI" = ask ]; then
   [ "$a" = "y" ] && DSI=yes || DSI=no
 fi
 if [ "$DSI" = yes ]; then
-  cp "$DIR"/dsi-ui/{pipedal-dsi-ui.patch,pipedal-dsi-ui.commit,dsi-ui-install.sh,kiosk-setup.sh,pipedal-run.sh,pipedal-remove.sh} "$HOME/"
+  cp "$DIR"/dsi-ui/{pipedal-dsi-ui.patch,pipedal-dsi-ui.commit,dsi-ui-install.sh,kiosk-setup.sh} "$DIR"/{pipedal-run.sh,pipedal-remove.sh} "$HOME/"
   chmod +x "$HOME"/{dsi-ui-install.sh,kiosk-setup.sh,pipedal-run.sh,pipedal-remove.sh}
   "$HOME/kiosk-setup.sh"
   "$HOME/dsi-ui-install.sh"     # asks about the reboot at the end

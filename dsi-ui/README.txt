@@ -5,8 +5,8 @@ Contents
   pipedal-dsi-ui.patch            all source changes (git patch, vite/src only)
   pipedal-dsi-ui.commit           PiPedal commit the patch belongs to
   dsi-ui-install.sh               rebuilds the web UI from source and installs it
-  pipedal-run.sh                  start/stop/restart/status of PiPedal and the kiosk (no reboot)
-  pipedal-remove.sh               remove PiPedal; --kiosk undoes the kiosk setup; --purge-data deletes all data
+  ../pipedal-run.sh               (repo root) start/stop/restart/status of PiPedal and the kiosk
+  ../pipedal-remove.sh            (repo root) remove PiPedal; --kiosk undoes the kiosk setup; --purge-data deletes all data
   kiosk-setup.sh                  Chromium kiosk (autologin, startx, hidden pointer)
   PiPedal-DSI-UI-procedure.docx   full description of the procedure
 
