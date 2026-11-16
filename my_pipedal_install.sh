@@ -28,7 +28,7 @@ done
 echo "== 1. Build tools and libraries"
 sudo apt update
 sudo apt install -y cmake ninja-build build-essential g++ git nodejs npm curl \
-    liblilv-dev libboost-dev libsystemd-dev libasound2-dev uuid-dev \
+    lv2-dev liblilv-dev libboost-dev libsystemd-dev libasound2-dev uuid-dev \
     authbind libavahi-client-dev libnm-dev libicu-dev libsdbus-c++-dev \
     libzip-dev google-perftools libgoogle-perftools-dev libpipewire-0.3-dev \
     libbz2-dev libssl-dev librsvg2-dev
