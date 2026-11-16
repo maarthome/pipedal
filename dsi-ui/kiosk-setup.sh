@@ -28,6 +28,8 @@ chmod +x "$HOME/.xserverrc"
 echo "== 4. Start X and Chromium on login at tty1 (not over SSH)"
 [ -f "$HOME/.bash_profile" ] && cp "$HOME/.bash_profile" "$HOME/bash_profile.bak"
 cat > "$HOME/.bash_profile" <<'EOT'
+# a login shell does not read ~/.bashrc by itself when ~/.bash_profile exists
+[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
 if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
   exec startx /usr/bin/chromium --kiosk --no-sandbox --noerrdialogs --disable-infobars --incognito http://localhost
 fi
