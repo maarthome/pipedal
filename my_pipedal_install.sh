@@ -26,6 +26,9 @@ done
 [ "$(id -u)" -ne 0 ] || { echo "Run as the normal user, not as root."; exit 1; }
 
 echo "== 1. Build tools and libraries"
+# The KXStudio repository ships an lv2-dev without /usr/include/lv2.h that breaks the build.
+# Prefer Debian's lv2-dev (no effect on systems without that repository).
+printf 'Package: lv2-dev\nPin: release o=Debian\nPin-Priority: 1001\n' | sudo tee /etc/apt/preferences.d/lv2-dev-debian >/dev/null
 sudo apt update
 sudo apt install -y cmake ninja-build build-essential g++ git nodejs npm curl \
     lv2-dev liblilv-dev libboost-dev libsystemd-dev libasound2-dev uuid-dev \
@@ -33,6 +36,21 @@ sudo apt install -y cmake ninja-build build-essential g++ git nodejs npm curl \
     libzip-dev google-perftools libgoogle-perftools-dev libpipewire-0.3-dev \
     libbz2-dev libssl-dev librsvg2-dev
 sudo apt install -y catch2 || sudo apt install -y catch
+# Verify the LV2 headers; repair a broken KXStudio lv2-dev by installing Debian's version.
+if [ ! -f /usr/include/lv2.h ] || [ -n "$(dpkg -V lv2-dev 2>/dev/null)" ]; then
+  echo "LV2 headers are missing or incomplete (KXStudio lv2-dev?). Installing Debian's lv2-dev..."
+  # stray symlinks (not owned by any package) block the Debian package
+  for l in /usr/include/lv2/lv2plug.in/ns/ext /usr/include/lv2/lv2plug.in/ns/extensions; do
+    [ -L "$l" ] && sudo rm -f "$l"
+  done
+  LV2_VER=$(apt-cache madison lv2-dev | awk -F'|' '/deb.debian.org/ {gsub(/ /,"",$2); print $2; exit}')
+  [ -n "$LV2_VER" ] || { echo "ERROR: no Debian lv2-dev version found (apt-cache madison lv2-dev)."; exit 1; }
+  sudo apt install -y --allow-downgrades "lv2-dev=$LV2_VER"
+  if [ ! -f /usr/include/lv2.h ] || [ -n "$(dpkg -V lv2-dev 2>/dev/null)" ]; then
+    echo "ERROR: LV2 headers are still broken. Check: dpkg -V lv2-dev ; ls -l /usr/include/lv2.h"
+    exit 1
+  fi
+fi
 NODE_MAJOR=$(node --version 2>/dev/null | sed 's/^v//; s/\..*//')
 if [ -z "$NODE_MAJOR" ] || [ "$NODE_MAJOR" -lt 22 ]; then
   echo "ERROR: PiPedal needs node.js 22 or later (found: $(node --version 2>/dev/null || echo none))."
