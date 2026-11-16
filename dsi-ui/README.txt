@@ -1,9 +1,11 @@
-NOTE: on the my_mods branch these changes are already part of the source (vite/src).
-dsi-ui-install.sh and the patch are only needed to add them to a plain upstream PiPedal.
-On my_mods only kiosk-setup.sh is needed (done by ../my_pipedal_install.sh).
+On the my_mods branch the DSI changes are already part of the source (vite/src).
+Install:      ../my_pipedal_install.sh
+Start / stop: ../pipedal-start.sh  ../pipedal-stop.sh   (nothing starts at boot)
+Other:        ../pipedal-run.sh status|manual-mode|update-kiosk ...   ../pipedal-remove.sh
+Full description: PiPedal-DSI-UI-procedure.docx (section 1c).
 
-PiPedal 2.0.110 on a 7" DSI touchscreen (800x480) - customised web interface
-=========================================================================
+The files below are only needed to add the changes to a plain upstream PiPedal 2.0.110
+(patch + dsi-ui-install.sh), or for a kiosk that starts at boot (kiosk-setup.sh).
 
 Contents
   pipedal-dsi-ui.patch            all source changes (git patch, vite/src only)
