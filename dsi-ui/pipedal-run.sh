@@ -49,11 +49,14 @@ restart_kiosk() { sudo systemctl restart getty@tty1; echo "Kiosk restarting on t
 status() {
   echo "== PiPedal services"
   for u in $(units); do printf '  %-32s %s\n' "$u" "$(systemctl is-active "$u")"; done
+  [ -z "$(units)" ] && echo "  no pipedal services found"
   echo "== Web server"
   echo "  http://localhost -> HTTP $(curl -s -o /dev/null -w '%{http_code}' http://localhost/ 2>/dev/null)"
   echo "== Installed web interface"
   ls /etc/pipedal/react/assets 2>/dev/null | grep -E '^main-.*\.js$' | sed 's/^/  /'
-  if grep -qs pipedal-toggle-fit /etc/pipedal/react/assets/*.js; then echo "  -> DSI-customised"; else echo "  -> original"; fi
+  if [ ! -d /etc/pipedal/react/assets ]; then echo "  PiPedal web interface not installed (/etc/pipedal/react missing)"
+  elif grep -qs pipedal-toggle-fit /etc/pipedal/react/assets/*.js; then echo "  -> DSI-customised"
+  else echo "  -> original"; fi
   echo "== Kiosk"
   if kiosk_running; then echo "  Chromium is running"; else echo "  Chromium is not running"; fi
 }
