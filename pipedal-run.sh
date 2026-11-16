@@ -55,9 +55,10 @@ StandardError=journal
 UtmpIdentifier=tty1
 UtmpMode=user
 ExecStart=/usr/bin/startx /usr/bin/chromium --kiosk --no-sandbox --noerrdialogs --disable-infobars --incognito http://localhost -- -nocursor
+ExecStop=-/usr/bin/pkill -TERM -x chromium
 TimeoutStopSec=8
 KillMode=control-group
-ExecStopPost=-/bin/systemctl --no-block start getty@tty1.service
+ExecStopPost=-+/bin/systemctl --no-block start getty@tty1.service
 EOT
   sudo systemctl daemon-reload
 }
