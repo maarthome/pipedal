@@ -17,7 +17,8 @@ UNIT=/etc/systemd/system/pipedal-kiosk.service
 AUTOLOGIN=/etc/systemd/system/getty@tty1.service.d/autologin.conf
 STATE="$HOME/.pipedal-autostart"
 CORE="pipedald.service pipedaladmind.service"
-KIOSK_DELAY="${KIOSK_DELAY:-8}"   # seconds between "web server answers" and starting Chromium
+CHROMIUM_FLAGS="${CHROMIUM_FLAGS:-}"   # extra Chromium flags, written into the kiosk service by update-kiosk
+KIOSK_DELAY="${KIOSK_DELAY:-0}"   # seconds between "web server answers" and starting Chromium
 
 units() { systemctl list-unit-files --plain --no-legend 'pipedal*.service' 2>/dev/null | awk '{print $1}'; }
 
@@ -32,8 +33,8 @@ start_services() {
     if echo " $CORE " | grep -q " $u " || systemctl is-enabled --quiet "$u" 2>/dev/null; then sudo systemctl start "$u"; fi
   done
   if wait_web; then
-    echo "PiPedal web server is up; waiting ${KIOSK_DELAY}s until the audio model is ready..."
-    sleep "$KIOSK_DELAY"
+    echo "PiPedal web server is up."
+    [ "$KIOSK_DELAY" -gt 0 ] && sleep "$KIOSK_DELAY"
   fi
 }
 stop_services() { for u in $(units); do sudo systemctl stop "$u" 2>/dev/null; done; }
@@ -58,7 +59,7 @@ StandardOutput=journal
 StandardError=journal
 UtmpIdentifier=tty1
 UtmpMode=user
-ExecStart=/usr/bin/startx /usr/bin/chromium --kiosk --no-sandbox --noerrdialogs --disable-infobars --incognito http://localhost -- -nocursor
+ExecStart=/usr/bin/startx /usr/bin/chromium --kiosk --no-sandbox --noerrdialogs --disable-infobars --incognito $CHROMIUM_FLAGS http://localhost -- -nocursor
 ExecStop=-/usr/bin/pkill -TERM -x chromium
 TimeoutStopSec=8
 KillMode=control-group
@@ -135,7 +136,7 @@ case "${1:-}" in
   restart-kiosk)   stop_kiosk; sleep 1; start_kiosk ;;
   restart-pipedal) stop_services; start_services ;;
   manual-mode)     manual_mode ;;
-  update-kiosk)    install_kiosk_unit; echo "Kiosk service file updated." ;;
+  update-kiosk)    install_kiosk_unit; echo "Kiosk service file updated (extra Chromium flags: ${CHROMIUM_FLAGS:-none})." ;;
   autostart)       autostart "${2:-}" ;;
   *) sed -n '2,14p' "$0"; exit 1 ;;
 esac
