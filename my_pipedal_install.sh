@@ -88,7 +88,7 @@ if curl -sf -o /dev/null http://localhost/; then echo "PiPedal web interface ans
 else echo "Warning: http://localhost does not answer yet (check: systemctl status pipedald)"; fi
 
 echo "== 6. Touchscreen kiosk: start and stop by hand, nothing starts at boot"
-chmod +x "$DIR"/pipedal-run.sh "$DIR"/pipedal-remove.sh   # the scripts are used from the repository folder
+chmod +x "$DIR"/pipedal-run.sh "$DIR"/pipedal-remove.sh "$DIR"/pipedal-start.sh "$DIR"/pipedal-stop.sh   # the scripts are used from the repository folder
 if [ "$DSI" = ask ]; then
   read -p "Set up manual start/stop of PiPedal + the touchscreen kiosk (no autostart at boot)? [y/N] " a
   [ "$a" = "y" ] && DSI=yes || DSI=no
@@ -99,4 +99,4 @@ else
   echo "Skipped. Later: $DIR/pipedal-run.sh manual-mode"
 fi
 
-echo "== Done. Start everything:  $DIR/pipedal-run.sh start     Stop everything:  $DIR/pipedal-run.sh stop"
+echo "== Done. Start everything:  $DIR/pipedal-start.sh     Stop everything:  $DIR/pipedal-stop.sh"
