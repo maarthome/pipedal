@@ -17,6 +17,7 @@ UNIT=/etc/systemd/system/pipedal-kiosk.service
 AUTOLOGIN=/etc/systemd/system/getty@tty1.service.d/autologin.conf
 STATE="$HOME/.pipedal-autostart"
 CORE="pipedald.service pipedaladmind.service"
+KIOSK_DELAY="${KIOSK_DELAY:-8}"   # seconds between "web server answers" and starting Chromium
 
 units() { systemctl list-unit-files --plain --no-legend 'pipedal*.service' 2>/dev/null | awk '{print $1}'; }
 
@@ -30,7 +31,10 @@ start_services() {
     # the core services are started even though they are not enabled at boot
     if echo " $CORE " | grep -q " $u " || systemctl is-enabled --quiet "$u" 2>/dev/null; then sudo systemctl start "$u"; fi
   done
-  wait_web && echo "PiPedal web server is up."
+  if wait_web; then
+    echo "PiPedal web server is up; waiting ${KIOSK_DELAY}s until the audio model is ready..."
+    sleep "$KIOSK_DELAY"
+  fi
 }
 stop_services() { for u in $(units); do sudo systemctl stop "$u" 2>/dev/null; done; }
 
